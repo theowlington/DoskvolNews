@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -59,7 +60,7 @@
 
         <!-- User ID Display for Collaboration/Persistence -->
         <div class="mb-6 text-center text-sm text-gray-400">
-            <p>Your User ID: <span id="userId" class="font-mono text-xs bg-[#2d3a4b] rounded px-2 py-1 select-all">Loading...</span></p>
+            <p>Your User ID: <span id="userId" class="font-mono text-xs bg-[#2d3a4b] rounded px-2 py-1 select-all">Local Session</span></p>
         </div>
 
         <h1 class="text-4xl md:text-5xl font-bold text-center mb-6 text-[#D4AF37]">Doskvol Rumor Generator</h1>
@@ -68,8 +69,8 @@
         <!-- Rumor Display Area -->
         <div id="rumorDisplay" class="min-h-[150px] transition-all duration-300">
             <div class="p-6 bg-[#161c28] border border-[#2d3a4b] rounded-lg text-center text-lg md:text-xl italic">
-                <p id="initialMessage">Loading rumors...</p>
-                <div id="loadingIndicator" class="mx-auto loading-animation"></div>
+                <p id="initialMessage">Click a button below to generate a new rumor.</p>
+                <div id="loadingIndicator" class="mx-auto loading-animation hidden"></div>
             </div>
         </div>
 
@@ -177,52 +178,6 @@
 
     <!-- JavaScript for generation logic -->
     <script type="module">
-        // Import Firebase modules
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, onSnapshot, collection, query, serverTimestamp, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Firebase Initialization
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        let db, auth, userId;
-
-        // IIFE for initialization
-        (async () => {
-            try {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                // Sign in with custom token or anonymously
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                // Wait for auth state to be ready
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        document.getElementById('userId').textContent = userId;
-
-                        // Set up real-time listener for rumors
-                        setupRumorListener();
-                    } else {
-                        console.error("User not authenticated.");
-                    }
-                });
-
-            } catch (error) {
-                console.error("Firebase initialization failed:", error);
-                document.getElementById('initialMessage').textContent = "Failed to load. Please try again.";
-                document.getElementById('loadingIndicator').style.display = 'none';
-            }
-        })();
-
         // Data for the Generator
         const coreData = {
             factions: ["The Unseen", "Foundation", "The Circle of Flame", "The Lampblacks", "The Dimmer Sisters", "The Billhooks", "The Gray Cloaks", "The Fog Hounds", "Council", "Spirit Wardens", "Imperial Military", "Sparkwrights", "The Lost", "Skovlander Refugees", "The Consulate of Iruvia", "The Consulate of The Dagger Isles", "Ecstasy of the Flesh", "Ulf Ironborn", "The Crows", "The Red Sashes", "The Silver Nails", "The Grinders", "The Forgotten Gods"],
@@ -269,7 +224,7 @@
         };
         
         // Deep Cuts content
-        const deepCutsData = {
+        let deepCutsData = {
             factions: ["The Church of The Weeping Lady", "The Reconciled", "The Brigade", "Cabbies", "Cyphers", "Dockers", "Gondoliers", "Sailors", "Laborers", "Servants", "Ink Rakes", "Ironworks Labor", "Rail Jacks", "Sparkrunners", "Tangletown", "The Unchained", "The Unity Commission", "Void Divers", "Skovlan Consulate", "Severosi Consulate", "Dagger Isles Consulate", "Iruvian Consulate", "Inspectors", "Rowan House", "Strangford House", "The Wraiths"],
             namedNpcs: ["Chief Pickett", "Captain Marsh", "Ellis Lockwood", "Hazel Chord", "Admiral Bowmore", "Commander Farros", "Sergeant Major Kain", "Jerett Keel", "Maraya Halili", "Carver Roth", "Chief Helker", "The Voice", "Grand Admiral Dunvil", "General Rowan", "Fleet Admiral Bowmore", "Captain Silas Dunvil", "Colonel Evelina Rowan", "Major Strangford", "Firash Dimabasa", "Tessa Brand", "Chief Inspector Coleburn", "Inspector Klev", "Warden Dunvil", "Master Morriston", "Trelloch", "Belle Brogan", "Hopper", "Lord Penderyn", "Lynthia Rowan", "Mylera Klev", "Arvus Clelland", "Lady Slane", "Brannon Gale", "Vondru Kaan", "Calica Malaahas", "Tuhan Sangara", "Arlen Skarvale", "Sergeant Kulcannan", "Fiana Blackvale", "Arbella Saltford", "Anson", "Five Twelve", "Pike", "Mason", "Master Chief Booker", "Lord Strangford", "Sera", "Arith", "Hester Vale", "Mara Keel", "Commander Bowmore", "Rolan Wott", "Jira", "Leclure", "Mordis", "Lochlan", "Tris", "Master Slane", "Corben", "Briggs", "Hutton"],
             districts: ["Skalla", "Memorial Park", "The Crows' Nest", "Cinder Downs"],
@@ -321,11 +276,12 @@
             "The Silver Nails", "The Grinders", "The Forgotten Gods"
         ]);
         
-        // The combined data source for generation
-        let combinedData = {};
+        // --- Local State and DOM Elements ---
+        let localRumors = [];
         
-        // --- DOM Elements and Event Listeners ---
         const rumorDisplay = document.getElementById('rumorDisplay');
+        const initialMessage = document.getElementById('initialMessage');
+        const loadingIndicator = document.getElementById('loadingIndicator');
         const deepCutsToggle = document.getElementById('deepCutsToggle');
         const catalystBtn = document.getElementById('generateCatalyst');
         const catalystCheckbox = document.getElementById('includeCatalyst');
@@ -334,7 +290,7 @@
         const generateHundredBtn = document.getElementById('generateHundred');
         const batchSizeInput = document.getElementById('batchSize');
         const clearAllBtn = document.getElementById('clearAllBtn');
-        const copyAllBtn = document.getElementById('copyAllBtn'); // New button element
+        const copyAllBtn = document.getElementById('copyAllBtn'); 
         const clearConfirmModal = document.getElementById('clearConfirmModal');
         const confirmClearBtn = document.getElementById('confirmClear');
         const cancelClearBtn = document.getElementById('cancelClear');
@@ -354,7 +310,6 @@
             return `${adjective} ${noun}`;
         };
         
-        // New function to generate a technological item procedurally
         const generateTechItem = (dataSource) => {
             const adjective = getRandomItem(dataSource.tech_adjectives);
             const noun = getRandomItem(dataSource.tech_nouns);
@@ -367,7 +322,6 @@
 
             const generatedValues = {};
             
-            // Generate all random values from the provided dataSource
             generatedValues.randomFaction = getRandomItem(dataSource.factions);
             generatedValues.randomOtherFaction = getRandomItem(dataSource.factions.filter(f => f !== generatedValues.randomFaction));
             generatedValues.randomNamedNpc = getRandomItem(dataSource.namedNpcs);
@@ -379,7 +333,6 @@
             generatedValues.randomLook = getRandomItem(dataSource.looks);
             generatedValues.randomGoal = getRandomItem(dataSource.goals);
             
-            // Item logic
             generatedValues.randomItems = getRandomItem(dataSource.items);
             generatedValues.randomCompoundItem = generateCompoundItem(dataSource);
             generatedValues.randomTechItem = generateTechItem(dataSource);
@@ -400,7 +353,6 @@
             let rumor = template;
 
             const getFactionName = (faction) => {
-                // Check if the faction is in our set of non-article factions
                 if (factionsNoArticle.has(faction)) {
                     return faction;
                 }
@@ -408,7 +360,6 @@
             };
 
 
-            // Replace all placeholders with generated values
             rumor = rumor
                 .replace(/{faction}/g, getFactionName(generatedValues.randomFaction))
                 .replace(/{other_faction}/g, getFactionName(generatedValues.randomOtherFaction))
@@ -431,10 +382,8 @@
                 .replace(/{vehicle}/g, generatedValues.randomVehicle)
                 .replace(/{tech_item}/g, generatedValues.randomTechItem);
 
-            // Cleanup for better grammar
             const startsWithVowel = word => ['a', 'e', 'i', 'o', 'u'].includes(word.charAt(0).toLowerCase());
 
-            // A/An logic
             rumor = rumor.replace(/a {look}/g, startsWithVowel(generatedValues.randomLook) ? `an ${generatedValues.randomLook}` : `a ${generatedValues.randomLook}`);
             rumor = rumor.replace(/a {profession}/g, startsWithVowel(generatedValues.randomProfession) ? `an ${generatedValues.randomProfession}` : `a ${generatedValues.randomProfession}`);
             rumor = rumor.replace(/a {warrior}/g, startsWithVowel(generatedValues.randomWarrior) ? `an ${generatedValues.randomWarrior}` : `a ${generatedValues.randomWarrior}`);
@@ -448,10 +397,8 @@
             rumor = rumor.replace(/long-haired/g, 'long-haired');
             rumor = rumor.replace(/glasses-wearing/g, 'glasses-wearing');
 
-            // Final cleanup of extra spaces
             rumor = rumor.replace(/ +/g, ' ');
 
-            // Capitalize the first letter of the whole string
             return rumor.charAt(0).toUpperCase() + rumor.slice(1);
         }
 
@@ -459,25 +406,24 @@
             let baseData = { ...coreData };
             
             if (deepCutsToggle.checked) {
-                // Combine core and deep cuts data
                 baseData = {
                     factions: [...coreData.factions, ...deepCutsData.factions],
                     namedNpcs: [...coreData.namedNpcs, ...deepCutsData.namedNpcs],
-                    namePrefixes: coreData.namePrefixes, // No deep cuts prefixes
-                    nameSuffixes: coreData.nameSuffixes, // No deep cuts suffixes
+                    namePrefixes: coreData.namePrefixes,
+                    nameSuffixes: coreData.nameSuffixes,
                     districts: [...coreData.districts, ...deepCutsData.districts],
-                    moves: coreData.moves, // No deep cuts moves
+                    moves: coreData.moves,
                     professions: [...coreData.professions, ...deepCutsData.professions],
-                    warriors: coreData.warriors, // No deep cuts warriors
+                    warriors: coreData.warriors,
                     itemAdjectives: [...coreData.itemAdjectives, ...deepCutsData.itemAdjectives],
                     itemNouns: [...coreData.itemNouns, ...deepCutsData.itemNouns],
                     items: [...coreData.items, ...deepCutsData.items],
                     vehicles: [...coreData.vehicles, ...deepCutsData.vehicles],
-                    looks: coreData.looks, // No deep cuts looks
-                    goals: coreData.goals, // No deep cuts goals
+                    looks: coreData.looks,
+                    goals: coreData.goals,
                     buildingTypes: { ...coreData.buildingTypes, ...deepCutsData.buildingTypes },
-                    buildingDetails: coreData.buildingDetails, // No deep cuts details
-                    buildingItems: coreData.buildingItems, // No deep cuts items
+                    buildingDetails: coreData.buildingDetails,
+                    buildingItems: coreData.buildingItems,
                     vicePurveyors: { ...coreData.vicePurveyors, ...deepCutsData.vicePurveyors },
                     viceLocations: { ...coreData.viceLocations, ...deepCutsData.viceLocations },
                     generalRumors: [...coreData.generalRumors, ...deepCutsData.generalRumors],
@@ -493,7 +439,6 @@
                     deepcuts_items: deepCutsData.deepcuts_items
                 };
             } else {
-                // Fallback to core data lists for deepcuts-specific categories if toggle is off
                 baseData.tech_adjectives = [];
                 baseData.tech_nouns = [];
                 baseData.deepcuts_items = [];
@@ -503,75 +448,23 @@
             return baseData;
         }
 
-        // --- Firebase Functions ---
-        async function saveRumor(rumorText) {
-            if (!userId) {
-                console.error("User not authenticated. Cannot save rumor.");
-                return;
-            }
-            try {
-                const rumorsCol = collection(db, `artifacts/${appId}/users/${userId}/rumors`);
-                await addDoc(rumorsCol, {
-                    text: rumorText,
-                    timestamp: serverTimestamp()
-                });
-            } catch (e) {
-                console.error("Error adding document: ", e);
-            }
-        }
-
-        async function clearAllRumors() {
-            if (!userId) {
-                console.error("User not authenticated. Cannot clear rumors.");
-                return;
-            }
-            setButtonsDisabled(true);
-            const rumorsCol = collection(db, `artifacts/${appId}/users/${userId}/rumors`);
-            const querySnapshot = await getDocs(rumorsCol);
-            
-            // Delete documents in a batch to be more efficient
-            const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
-            await Promise.all(deletePromises);
-            setButtonsDisabled(false);
-        }
-
-        function setupRumorListener() {
-            if (!userId) {
-                console.error("User not authenticated. Cannot set up listener.");
-                return;
-            }
-            const rumorsCol = collection(db, `artifacts/${appId}/users/${userId}/rumors`);
-            const q = query(rumorsCol);
-            
-            onSnapshot(q, (querySnapshot) => {
-                const rumors = [];
-                querySnapshot.forEach((doc) => {
-                    rumors.push({
-                        text: doc.data().text,
-                        timestamp: doc.data().timestamp
-                    });
-                });
-
-                // Sort the rumors in memory by timestamp
-                rumors.sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
-
-                renderRumors(rumors.map(r => r.text));
-            });
-        }
-
-        function renderRumors(rumors) {
+        function renderRumors() {
             rumorDisplay.innerHTML = '';
-            if (rumors.length === 0) {
+            if (localRumors.length === 0) {
                 rumorDisplay.innerHTML = `<p class="p-6 bg-[#161c28] border border-[#2d3a4b] rounded-lg text-center text-lg md:text-xl italic">
                     Click a button below to generate a new rumor.
                 </p>`;
+                clearAllBtn.classList.add('hidden');
+                copyAllBtn.classList.add('hidden');
             } else {
-                rumors.forEach(rumorText => {
+                localRumors.forEach(rumorText => {
                     const rumorItem = document.createElement('p');
                     rumorItem.className = 'rumor-item';
                     rumorItem.textContent = rumorText;
                     rumorDisplay.appendChild(rumorItem);
                 });
+                clearAllBtn.classList.remove('hidden');
+                copyAllBtn.classList.remove('hidden');
             }
         }
 
@@ -586,7 +479,7 @@
             });
         }
 
-        async function generateAndSaveSingleRumor(rumorType) {
+        async function generateAndAddSingleRumor(rumorType) {
             setButtonsDisabled(true);
             const dataSource = buildDataSource();
             let template;
@@ -603,12 +496,13 @@
             }
             const rumorText = generateRumorText(template, dataSource);
             if (rumorText) {
-                await saveRumor(rumorText);
+                localRumors.unshift(rumorText); // Add to the beginning of the array
+                renderRumors();
             }
             setButtonsDisabled(false);
         }
 
-        async function generateAndSaveBatchRumors(batchSize) {
+        async function generateAndAddBatchRumors(batchSize) {
             const size = parseInt(batchSize, 10);
             if (isNaN(size) || size < 1 || size > 100) {
                 rumorDisplay.innerHTML = `<p class="rumor-item !bg-red-800 !border-red-600">Please enter a number between 1 and 100.</p>`;
@@ -643,23 +537,29 @@
                 const template = getRandomItem(selectedTemplates);
                 const rumorText = generateRumorText(template, dataSource);
                 if (rumorText) {
-                    await saveRumor(rumorText);
+                    localRumors.unshift(rumorText);
                 }
             }
+            renderRumors();
             setButtonsDisabled(false);
+        }
+        
+        function clearAllRumors() {
+            localRumors = [];
+            renderRumors();
         }
 
         // --- Event Listeners ---
-        document.getElementById('generateGeneral').addEventListener('click', () => generateAndSaveSingleRumor('general'));
-        document.getElementById('generateFaction').addEventListener('click', () => generateAndSaveSingleRumor('faction'));
-        document.getElementById('generateCharacter').addEventListener('click', () => generateAndSaveSingleRumor('character'));
-        document.getElementById('generateDistrict').addEventListener('click', () => generateAndSaveSingleRumor('district'));
-        document.getElementById('generateItem').addEventListener('click', () => generateAndSaveSingleRumor('item'));
-        document.getElementById('generateBuilding').addEventListener('click', () => generateAndSaveSingleRumor('building'));
-        document.getElementById('generateVice').addEventListener('click', () => generateAndSaveSingleRumor('vice'));
-        catalystBtn.addEventListener('click', () => generateAndSaveSingleRumor('catalyst'));
-        generateBatchBtn.addEventListener('click', () => generateAndSaveBatchRumors(batchSizeInput.value));
-        generateHundredBtn.addEventListener('click', () => generateAndSaveBatchRumors(100));
+        document.getElementById('generateGeneral').addEventListener('click', () => generateAndAddSingleRumor('general'));
+        document.getElementById('generateFaction').addEventListener('click', () => generateAndAddSingleRumor('faction'));
+        document.getElementById('generateCharacter').addEventListener('click', () => generateAndAddSingleRumor('character'));
+        document.getElementById('generateDistrict').addEventListener('click', () => generateAndAddSingleRumor('district'));
+        document.getElementById('generateItem').addEventListener('click', () => generateAndAddSingleRumor('item'));
+        document.getElementById('generateBuilding').addEventListener('click', () => generateAndAddSingleRumor('building'));
+        document.getElementById('generateVice').addEventListener('click', () => generateAndAddSingleRumor('vice'));
+        catalystBtn.addEventListener('click', () => generateAndAddSingleRumor('catalyst'));
+        generateBatchBtn.addEventListener('click', () => generateAndAddBatchRumors(batchSizeInput.value));
+        generateHundredBtn.addEventListener('click', () => generateAndAddBatchRumors(100));
 
         // Show confirmation modal before clearing
         clearAllBtn.addEventListener('click', () => {
@@ -679,11 +579,9 @@
 
         // Handle copy to clipboard
         copyAllBtn.addEventListener('click', () => {
-            const rumors = Array.from(document.querySelectorAll('.rumor-item'));
-            const rumorText = rumors.map(p => p.textContent).join('\n\n');
+            const rumorText = localRumors.join('\n\n');
 
             if (rumorText) {
-                // Use a temporary textarea to handle the copy command
                 const tempTextarea = document.createElement('textarea');
                 tempTextarea.value = rumorText;
                 document.body.appendChild(tempTextarea);
@@ -710,6 +608,9 @@
 
         // Initialize state based on toggle
         deepCutsToggle.dispatchEvent(new Event('change'));
+
+        // Initial render
+        renderRumors();
 
     </script>
 </body>
