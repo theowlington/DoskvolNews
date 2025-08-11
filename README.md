@@ -1,5 +1,3 @@
-# DoskvolNews
-Rumours for Blades in the Dark
 <!DOCTYPE html>
 <html lang="en">
 <head>
